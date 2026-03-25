@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Face Dashboard - SSD Full Options</title>
+    <script src="face-api.min.js"></script>
+    <style>
+        :root { --primary: #00d4ff; --bg: #0f172a; --card: #1e293b; --accent: #22c55e; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        .container { background: var(--card); padding: 25px; border-radius: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); max-width: 900px; width: 100%; text-align: center; border: 1px solid #334155; }
+        
+        .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 15px; margin-bottom: 20px; background: rgba(255,255,255,0.03); padding: 20px; border-radius: 15px; }
+        .control-box { display: flex; flex-direction: column; gap: 8px; }
+        .group-label { font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+        
+        .btn-group { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+        button, label.upload-btn { padding: 10px 16px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; background: #334155; color: #cbd5e1; transition: 0.3s; }
+        button.active { background: var(--primary); color: #0f172a; box-shadow: 0 0 15px rgba(0,212,255,0.4); }
+        
+        #btn-scan { background: var(--accent); color: white; width: 100%; margin-top: 15px; padding: 15px; display: none; border-radius: 10px; border: none; cursor: pointer; font-weight: bold; }
+        #btn-take-photo { background: #f59e0b; color: white; width: 100%; margin-top: 10px; padding: 12px; border-radius: 10px; border: none; cursor: pointer; }
+
+        #media-container { position: relative; margin-top: 20px; background: #000; border-radius: 12px; overflow: hidden; display: inline-block; border: 2px solid #334155; line-height: 0; }
+        video, img { max-width: 100%; height: auto; display: block; }
+        canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
+        .mirror { transform: scaleX(-1); }
+
+        #status-bar { margin-bottom: 15px; padding: 12px; border-radius: 8px; background: #1e293b; border-left: 5px solid var(--primary); width: 100%; text-align: left; box-sizing: border-box; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 style="color: var(--primary); margin-top: 0;">AI FACE INTELLIGENCE DASHBOARD</h2>
+    <div id="status-bar">⏳ Đang khởi tạo hệ thống...</div>
+
+    <div class="dashboard">
+        <div class="control-box">
+            <span class="group-label">Nguồn vào</span>
+            <div class="btn-group">
+                <button id="mode-live" class="active">Live</button>
+                <button id="mode-capture">Chụp ảnh</button>
+                <label class="upload-btn">Tải ảnh <input type="file" id="image-upload" accept="image/*" class="hidden"></label>
+            </div>
+        </div>
+        <div class="control-box">
+            <span class="group-label">Tính năng AI</span>
+            <div class="btn-group">
+                <button id="opt-age" class="active">Hiện Tuổi</button>
+                <button id="opt-count" class="active">Số người</button>
+            </div>
+        </div>
+    </div>
+
+    <button id="btn-take-photo" class="hidden">📸 CHỤP ẢNH WEBCAM</button>
+    <button id="btn-scan">🚀 PHÂN TÍCH ẢNH (SSD MODE)</button>
+
+    <div id="media-container">
+        <video id="video" width="640" height="480" autoplay muted class="mirror"></video>
+        <img id="image-preview" class="hidden">
+        <canvas id="overlay"></canvas>
+    </div>
+</div>
+
+<script>
+    const video = document.getElementById('video');
+    const imagePreview = document.getElementById('image-preview');
+    const statusBar = document.getElementById('status-bar');
+    const btnScan = document.getElementById('btn-scan');
+    const btnTakePhoto = document.getElementById('btn-take-photo');
+    const canvas = document.getElementById('overlay');
+    
+    let currentMode = 'live'; 
+    let liveInterval;
+
+    async function initAI() {
+        try {
+            const MODEL_URL = './models';
+            await Promise.all([
+                faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+                faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL)
+            ]);
+            statusBar.innerText = "✅ AI Sẵn sàng. Chế độ: SSD Mobilenet V1.";
+            startWebcam();
+            startLiveDetection();
+        } catch (err) {
+            statusBar.innerHTML = "<b style='color:#ef4444'>❌ LỖI: Kiểm tra lại thư mục /models (Thiếu shard2)!</b>";
+        }
+    }
+
+    function startWebcam() {
+        navigator.mediaDevices.getUserMedia({ video: {} })
+            .then(stream => { video.srcObject = stream; })
+            .catch(() => { statusBar.innerText = "❌ Lỗi: Không mở được Camera"; });
+    }
+
+    async function runAI(source) {
+        if (source.tagName === 'IMG' && !source.complete) return;
+
+        // --- CƠ CHẾ CHỐNG LỆCH TUYỆT ĐỐI ---
+        const rect = source.getBoundingClientRect();
+        const displaySize = { width: rect.width, height: rect.height };
+        faceapi.matchDimensions(canvas, displaySize);
+
+        const detections = await faceapi.detectAllFaces(source).withFaceLandmarks().withAgeAndGender();
+        const resizedResults = faceapi.resizeResults(detections, displaySize);
+        
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        ctx.save();
+        if (source === video) {
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1); // Lật gương cho Webcam
+        } else {
+            ctx.setTransform(1, 0, 0, 1, 0, 0); // Giữ nguyên cho Ảnh tải lên
+        }
+
+        resizedResults.forEach(result => {
+            const { age, gender, detection } = result;
+            const label = document.getElementById('opt-age').classList.contains('active') 
+                ? `${Math.round(age)}t - ${gender === 'male' ? 'Nam' : 'Nữ'}` : "";
+            
+            new faceapi.draw.DrawBox(detection.box, { 
+                label: label, 
+                boxColor: '#00d4ff',
+                drawLabelOptions: { fontSize: 15, padding: 4 }
+            }).draw(canvas);
+        });
+        ctx.restore();
+
+        if (document.getElementById('opt-count').classList.contains('active')) {
+            statusBar.innerText = `🔍 Tìm thấy: ${detections.length} khuôn mặt.`;
+        }
+    }
+
+    function startLiveDetection() {
+        if (liveInterval) clearInterval(liveInterval);
+        liveInterval = setInterval(() => {
+            if (currentMode === 'live' && video.readyState === 4) runAI(video);
+        }, 150); 
+    }
+
+    // Sự kiện điều khiển
+    document.getElementById('mode-live').onclick = (e) => {
+        resetUI(); currentMode = 'live';
+        e.target.classList.add('active');
+        video.classList.remove('hidden');
+        startLiveDetection();
+    };
+
+    document.getElementById('mode-capture').onclick = (e) => {
+        resetUI(); currentMode = 'capture';
+        e.target.classList.add('active');
+        video.classList.remove('hidden');
+        btnTakePhoto.classList.remove('hidden');
+    };
+
+    document.getElementById('image-upload').onchange = (e) => {
+        resetUI(); currentMode = 'upload';
+        const file = e.target.files[0];
+        if (file) {
+            video.classList.add('hidden');
+            imagePreview.classList.remove('hidden');
+            imagePreview.src = URL.createObjectURL(file);
+            btnScan.style.display = 'block';
+            statusBar.innerText = "🖼️ Đã tải ảnh. Nhấn 'PHÂN TÍCH ẢNH' bên dưới.";
+        }
+    };
+
+    btnTakePhoto.onclick = () => {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = video.videoWidth; tempCanvas.height = video.videoHeight;
+        const tCtx = tempCanvas.getContext('2d');
+        tCtx.translate(tempCanvas.width, 0); tCtx.scale(-1, 1);
+        tCtx.drawImage(video, 0, 0);
+        imagePreview.src = tempCanvas.toDataURL('image/png');
+        imagePreview.classList.remove('hidden');
+        video.classList.add('hidden');
+        btnTakePhoto.classList.add('hidden');
+        btnScan.style.display = 'block';
+    };
+
+    btnScan.onclick = () => runAI(imagePreview);
+
+    function resetUI() {
+        clearInterval(liveInterval);
+        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+        video.classList.add('hidden');
+        imagePreview.classList.add('hidden');
+        btnScan.style.display = 'none';
+        btnTakePhoto.classList.add('hidden');
+        document.querySelectorAll('.control-box button').forEach(b => b.classList.remove('active'));
+    }
+
+    document.getElementById('opt-age').onclick = (e) => e.target.classList.toggle('active');
+    document.getElementById('opt-count').onclick = (e) => e.target.classList.toggle('active');
+
+    initAI();
+</script>
+</body>
+</html>
