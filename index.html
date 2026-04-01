@@ -3,64 +3,125 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Face Dashboard - SSD Full Options</title>
+    <title>AI Face Intelligence - Deep Vision Pro</title>
     <script src="face-api.min.js"></script>
     <style>
-        :root { --primary: #00d4ff; --bg: #0f172a; --card: #1e293b; --accent: #22c55e; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
-        .container { background: var(--card); padding: 25px; border-radius: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); max-width: 900px; width: 100%; text-align: center; border: 1px solid #334155; }
+        :root { --primary: #00d4ff; --bg: #0f172a; --card: #1e293b; --accent: #22c55e; --danger: #ef4444; --warning: #f59e0b; }
         
-        .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 15px; margin-bottom: 20px; background: rgba(255,255,255,0.03); padding: 20px; border-radius: 15px; }
-        .control-box { display: flex; flex-direction: column; gap: 8px; }
-        .group-label { font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
-        
-        .btn-group { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
-        button, label.upload-btn { padding: 10px 16px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; background: #334155; color: #cbd5e1; transition: 0.3s; }
-        button.active { background: var(--primary); color: #0f172a; box-shadow: 0 0 15px rgba(0,212,255,0.4); }
-        
-        #btn-scan { background: var(--accent); color: white; width: 100%; margin-top: 15px; padding: 15px; display: none; border-radius: 10px; border: none; cursor: pointer; font-weight: bold; }
-        #btn-take-photo { background: #f59e0b; color: white; width: 100%; margin-top: 10px; padding: 12px; border-radius: 10px; border: none; cursor: pointer; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
 
-        #media-container { position: relative; margin-top: 20px; background: #000; border-radius: 12px; overflow: hidden; display: inline-block; border: 2px solid #334155; line-height: 0; }
-        video, img { max-width: 100%; height: auto; display: block; }
-        canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
+        .main-wrapper { display: flex; flex-direction: row; background: var(--card); border-radius: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); border: 1px solid #334155; overflow: hidden; max-width: 1300px; width: 95%; height: 90vh; }
+
+        /* --- SIDEBAR ĐIỀU KHIỂN --- */
+        .sidebar { width: 340px; padding: 25px; background: rgba(15, 23, 42, 0.7); border-right: 1px solid #475569; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
+        
+        /* Chỉ số kết quả */
+        .stats-container { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .stat-box { background: #0f172a; padding: 12px; border-radius: 12px; border: 1px solid #334155; text-align: center; }
+        .stat-value { display: block; font-size: 1.8rem; font-weight: 800; color: var(--primary); font-family: monospace; }
+        .stat-label { font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+
+        /* Box chức năng */
+        .control-box { display: flex; flex-direction: column; gap: 8px; }
+        .group-label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; font-weight: bold; }
+        .btn-group { display: flex; flex-direction: column; gap: 6px; }
+        .btn-row { display: flex; gap: 6px; }
+        
+        button, label.upload-btn { padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; background: #334155; color: #cbd5e1; transition: 0.2s; font-size: 13px; text-align: center; }
+        button.active { background: var(--primary); color: #0f172a; box-shadow: 0 0 15px rgba(0,212,255,0.3); }
+
+        #btn-toggle-cam { background: var(--danger); color: white; }
+        #btn-toggle-cam.off { background: var(--accent); }
+
+        /* Cảnh báo Engine Sâu */
+        .engine-warning { background: rgba(245, 158, 11, 0.15); border: 1px solid var(--warning); color: var(--warning); padding: 10px; border-radius: 8px; font-size: 11px; line-height: 1.4; display: none; }
+
+        /* Nút hành động chính */
+        #btn-scan, #btn-take-photo { background: var(--accent); color: white; width: 100%; padding: 16px; border-radius: 12px; font-weight: 800; border: none; cursor: pointer; margin-top: 10px; font-size: 15px; }
+
+        /* --- KHU VỰC HIỂN THỊ --- */
+        .display-area { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; position: relative; background: #020617; }
+        #media-container { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+        video, img { max-width: 100%; max-height: 100%; border-radius: 12px; border: 2px solid #1e293b; }
+        canvas { position: absolute; pointer-events: none; z-index: 5; }
         .mirror { transform: scaleX(-1); }
 
-        #status-bar { margin-bottom: 15px; padding: 12px; border-radius: 8px; background: #1e293b; border-left: 5px solid var(--primary); width: 100%; text-align: left; box-sizing: border-box; }
+        /* Overlay khi đang quét */
+        #scan-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 20; border-radius: 12px; }
+        .spinner { width: 50px; height: 50px; border: 5px solid #1e293b; border-top: 5px solid var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 15px; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        #status-bar { font-size: 12px; padding: 10px; border-radius: 8px; background: #0f172a; border-left: 4px solid var(--primary); color: #cbd5e1; }
         .hidden { display: none !important; }
+        h2 { font-size: 1.4rem; color: var(--primary); margin: 0; text-align: center; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2 style="color: var(--primary); margin-top: 0;">AI FACE INTELLIGENCE DASHBOARD</h2>
-    <div id="status-bar">⏳ Đang khởi tạo hệ thống...</div>
-
-    <div class="dashboard">
-        <div class="control-box">
-            <span class="group-label">Nguồn vào</span>
-            <div class="btn-group">
-                <button id="mode-live" class="active">Live</button>
-                <button id="mode-capture">Chụp ảnh</button>
-                <label class="upload-btn">Tải ảnh <input type="file" id="image-upload" accept="image/*" class="hidden"></label>
+<div class="main-wrapper">
+    <div class="sidebar">
+        <h2>AI VISION PRO</h2>
+        
+        <div class="stats-container">
+            <div class="stat-box">
+                <span class="stat-value" id="fps-val">0</span>
+                <span class="stat-label">FPS</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-value" id="count-val">0</span>
+                <span class="stat-label">Faces</span>
             </div>
         </div>
+
+        <div id="status-bar"> Đang khởi động hệ thống...</div>
+
+        <div class="control-box">
+            <span class="group-label">Engine Nhận Diện</span>
+            <div class="btn-row">
+                <button id="engine-ssd" class="active" style="flex:1">SSD (Nhanh)</button>
+                <button id="engine-mtcnn" style="flex:1">MTCNN (Sâu)</button>
+            </div>
+            <div id="mtcnn-alert" class="engine-warning">
+                ⚠️ <b>Chế độ Sâu:</b> MTCNN đang quét chi tiết. FPS sẽ thấp hơn, yêu cầu ảnh rõ hơn, quét chính xác hơn.
+            </div>
+        </div>
+
+        <div class="control-box">
+            <span class="group-label">Nguồn dữ liệu</span>
+            <div class="btn-group">
+                <button id="mode-live" class="active"> Chế độ Live</button>
+                <button id="mode-capture"> Chụp Webcam</button>
+                <label class="upload-btn"> Tải ảnh file <input type="file" id="image-upload" accept="image/*" class="hidden"></label>
+            </div>
+        </div>
+
+        <div class="control-box">
+            <span class="group-label">Thiết bị</span>
+            <button id="btn-toggle-cam"> Tắt Camera</button>
+        </div>
+
         <div class="control-box">
             <span class="group-label">Tính năng AI</span>
-            <div class="btn-group">
-                <button id="opt-age" class="active">Hiện Tuổi</button>
-                <button id="opt-count" class="active">Số người</button>
-            </div>
+            <button id="opt-age" class="active"> Hiển thị Tuổi / Giới tính</button>
+        </div>
+
+        <div id="action-zone">
+            <button id="btn-take-photo" class="hidden">XÁC NHẬN CHỤP ẢNH</button>
+            <button id="btn-scan" class="hidden">BẮT ĐẦU PHÂN TÍCH</button>
         </div>
     </div>
 
-    <button id="btn-take-photo" class="hidden">📸 CHỤP ẢNH WEBCAM</button>
-    <button id="btn-scan">🚀 PHÂN TÍCH ẢNH (SSD MODE)</button>
-
-    <div id="media-container">
-        <video id="video" width="640" height="480" autoplay muted class="mirror"></video>
-        <img id="image-preview" class="hidden">
-        <canvas id="overlay"></canvas>
+    <div class="display-area">
+        <div id="media-container">
+            <div id="scan-overlay">
+                <div class="spinner"></div>
+                <span id="scan-text">Đang phân tích AI...</span>
+            </div>
+            
+            <video id="video" width="640" height="480" autoplay muted class="mirror"></video>
+            <img id="image-preview" class="hidden">
+            <canvas id="overlay"></canvas>
+        </div>
     </div>
 </div>
 
@@ -70,108 +131,187 @@
     const statusBar = document.getElementById('status-bar');
     const btnScan = document.getElementById('btn-scan');
     const btnTakePhoto = document.getElementById('btn-take-photo');
+    const btnToggleCam = document.getElementById('btn-toggle-cam');
     const canvas = document.getElementById('overlay');
+    const scanOverlay = document.getElementById('scan-overlay');
+    const mtcnnAlert = document.getElementById('mtcnn-alert');
+    
+    const fpsVal = document.getElementById('fps-val');
+    const countVal = document.getElementById('count-val');
     
     let currentMode = 'live'; 
-    let liveInterval;
+    let currentEngine = 'ssd';
+    let localStream = null;
+    let isCamOn = false;
+    let lastTime = 0;
+    let isProcessing = false;
 
+    // 1. NẠP MODEL
     async function initAI() {
         try {
             const MODEL_URL = './models';
             await Promise.all([
                 faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+                faceapi.nets.mtcnn.loadFromUri(MODEL_URL),
                 faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
                 faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL)
             ]);
-            statusBar.innerText = "✅ AI Sẵn sàng. Chế độ: SSD Mobilenet V1.";
-            startWebcam();
-            startLiveDetection();
+            statusBar.innerText = " AI đã sẵn sàng hoạt động.";
+            await startWebcam();
+            requestAnimationFrame(processFrame);
         } catch (err) {
-            statusBar.innerHTML = "<b style='color:#ef4444'>❌ LỖI: Kiểm tra lại thư mục /models (Thiếu shard2)!</b>";
+            statusBar.innerHTML = "<b style='color:red'>❌ Lỗi: Không thể nạp models. Kiểm tra đường dẫn /models.</b>";
         }
     }
 
-    function startWebcam() {
-        navigator.mediaDevices.getUserMedia({ video: {} })
-            .then(stream => { video.srcObject = stream; })
-            .catch(() => { statusBar.innerText = "❌ Lỗi: Không mở được Camera"; });
+    // 2. WEBCAM
+    async function startWebcam() {
+        if (localStream) stopWebcam();
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+            video.srcObject = localStream;
+            isCamOn = true;
+            updateCamUI(true);
+            video.classList.remove('hidden');
+            return true;
+        } catch (err) {
+            statusBar.innerText = "❌ Không tìm thấy camera.";
+            return false;
+        }
     }
 
-    async function runAI(source) {
-        if (source.tagName === 'IMG' && !source.complete) return;
+    function stopWebcam() {
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+            localStream = null;
+        }
+        video.srcObject = null;
+        isCamOn = false;
+        updateCamUI(false);
+        clearCanvas();
+    }
 
-        // --- CƠ CHẾ CHỐNG LỆCH TUYỆT ĐỐI ---
-        const rect = source.getBoundingClientRect();
-        const displaySize = { width: rect.width, height: rect.height };
+    function updateCamUI(on) {
+        btnToggleCam.innerText = on ? " Tắt Camera" : " Bật Camera";
+        btnToggleCam.className = on ? "" : "off";
+        if (!on) { fpsVal.innerText = "0"; countVal.innerText = "0"; }
+    }
+
+    function clearCanvas() {
+        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // 3. XỬ LÝ FRAME LIVE
+    async function processFrame(now) {
+        if (currentMode === 'live' && isCamOn && video.readyState === 4 && !isProcessing) {
+            const deltaTime = now - lastTime;
+            lastTime = now;
+            fpsVal.innerText = deltaTime > 0 ? Math.round(1000 / deltaTime) : 0;
+            
+            isProcessing = true;
+            await runAI(video);
+            isProcessing = false;
+        }
+        requestAnimationFrame(processFrame);
+    }
+
+    // 4. HÀM CHẠY AI (LÕI XỬ LÝ)
+    async function runAI(source) {
+        if (!source || (source.tagName === 'IMG' && !source.complete)) return;
+        
+        const displaySize = { width: source.clientWidth, height: source.clientHeight };
+        if (displaySize.width === 0) return;
         faceapi.matchDimensions(canvas, displaySize);
 
-        const detections = await faceapi.detectAllFaces(source).withFaceLandmarks().withAgeAndGender();
+        // CẤU HÌNH ENGINE
+        let options;
+        if (currentEngine === 'ssd') {
+            options = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 });
+        } else {
+            // Tối ưu cho nhóm đông người (đã giảm minFaceSize xuống 20)
+            options = new faceapi.MtcnnOptions({ 
+                minFaceSize: 20, 
+                scaleFactor: 0.709,
+                maxNumStages: 3 
+            });
+        }
+
+        const detections = await faceapi.detectAllFaces(source, options).withFaceLandmarks().withAgeAndGender();
         const resizedResults = faceapi.resizeResults(detections, displaySize);
         
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         ctx.save();
-        if (source === video) {
-            ctx.translate(canvas.width, 0);
-            ctx.scale(-1, 1); // Lật gương cho Webcam
-        } else {
-            ctx.setTransform(1, 0, 0, 1, 0, 0); // Giữ nguyên cho Ảnh tải lên
-        }
+        if (source === video) { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
 
         resizedResults.forEach(result => {
             const { age, gender, detection } = result;
             const label = document.getElementById('opt-age').classList.contains('active') 
                 ? `${Math.round(age)}t - ${gender === 'male' ? 'Nam' : 'Nữ'}` : "";
             
-            new faceapi.draw.DrawBox(detection.box, { 
-                label: label, 
-                boxColor: '#00d4ff',
-                drawLabelOptions: { fontSize: 15, padding: 4 }
-            }).draw(canvas);
+            // Đổi màu box theo engine để nhận diện
+            const boxColor = currentEngine === 'mtcnn' ? '#22c55e' : '#00d4ff';
+            new faceapi.draw.DrawBox(detection.box, { label, boxColor }).draw(canvas);
         });
         ctx.restore();
 
-        if (document.getElementById('opt-count').classList.contains('active')) {
-            statusBar.innerText = `🔍 Tìm thấy: ${detections.length} khuôn mặt.`;
-        }
+        countVal.innerText = detections.length;
     }
 
-    function startLiveDetection() {
-        if (liveInterval) clearInterval(liveInterval);
-        liveInterval = setInterval(() => {
-            if (currentMode === 'live' && video.readyState === 4) runAI(video);
-        }, 150); 
-    }
+    // 5. SỰ KIỆN NÚT BẤM
+    btnToggleCam.onclick = async () => isCamOn ? stopWebcam() : await startWebcam();
 
-    // Sự kiện điều khiển
-    document.getElementById('mode-live').onclick = (e) => {
-        resetUI(); currentMode = 'live';
-        e.target.classList.add('active');
-        video.classList.remove('hidden');
-        startLiveDetection();
+    document.getElementById('engine-ssd').onclick = (e) => {
+        currentEngine = 'ssd';
+        toggleEngineUI(e.target);
+        mtcnnAlert.style.display = 'none';
+        statusBar.innerText = " Chuyển sang SSD (Nhanh).";
     };
 
-    document.getElementById('mode-capture').onclick = (e) => {
-        resetUI(); currentMode = 'capture';
+    document.getElementById('engine-mtcnn').onclick = (e) => {
+        currentEngine = 'mtcnn';
+        toggleEngineUI(e.target);
+        mtcnnAlert.style.display = 'block';
+        statusBar.innerText = " Chuyển sang MTCNN (Sâu).";
+    };
+
+    function toggleEngineUI(target) {
+        document.getElementById('engine-ssd').classList.remove('active');
+        document.getElementById('engine-mtcnn').classList.remove('active');
+        target.classList.add('active');
+    }
+
+    document.getElementById('mode-live').onclick = async (e) => {
+        resetModeUI(); currentMode = 'live';
+        e.target.classList.add('active');
+        video.classList.remove('hidden');
+        if (!isCamOn) await startWebcam();
+    };
+
+    document.getElementById('mode-capture').onclick = async (e) => {
+        resetModeUI(); currentMode = 'capture';
         e.target.classList.add('active');
         video.classList.remove('hidden');
         btnTakePhoto.classList.remove('hidden');
+        if (!isCamOn) await startWebcam();
     };
 
     document.getElementById('image-upload').onchange = (e) => {
-        resetUI(); currentMode = 'upload';
         const file = e.target.files[0];
         if (file) {
-            video.classList.add('hidden');
+            resetModeUI();
+            currentMode = 'upload';
+            stopWebcam();
             imagePreview.classList.remove('hidden');
             imagePreview.src = URL.createObjectURL(file);
-            btnScan.style.display = 'block';
-            statusBar.innerText = "🖼️ Đã tải ảnh. Nhấn 'PHÂN TÍCH ẢNH' bên dưới.";
+            btnScan.classList.remove('hidden');
+            statusBar.innerText = " Đã tải ảnh. Nhấn 'Phân tích' để quét.";
         }
     };
 
     btnTakePhoto.onclick = () => {
+        if (!isCamOn) return;
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = video.videoWidth; tempCanvas.height = video.videoHeight;
         const tCtx = tempCanvas.getContext('2d');
@@ -181,23 +321,30 @@
         imagePreview.classList.remove('hidden');
         video.classList.add('hidden');
         btnTakePhoto.classList.add('hidden');
-        btnScan.style.display = 'block';
+        btnScan.classList.remove('hidden');
+        stopWebcam();
     };
 
-    btnScan.onclick = () => runAI(imagePreview);
+    btnScan.onclick = async () => {
+        scanOverlay.style.display = 'flex';
+        document.getElementById('scan-text').innerText = `Đang phân tích (${currentEngine.toUpperCase()})...`;
+        // Delay nhẹ để UI spinner kịp hiện
+        setTimeout(async () => {
+            await runAI(imagePreview);
+            scanOverlay.style.display = 'none';
+        }, 150);
+    };
 
-    function resetUI() {
-        clearInterval(liveInterval);
-        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    function resetModeUI() {
+        clearCanvas();
         video.classList.add('hidden');
         imagePreview.classList.add('hidden');
-        btnScan.style.display = 'none';
+        btnScan.classList.add('hidden');
         btnTakePhoto.classList.add('hidden');
-        document.querySelectorAll('.control-box button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active'));
     }
 
     document.getElementById('opt-age').onclick = (e) => e.target.classList.toggle('active');
-    document.getElementById('opt-count').onclick = (e) => e.target.classList.toggle('active');
 
     initAI();
 </script>
