@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Face Intelligence - Deep Vision Pro</title>
-    <script src="face-api.min.js"></script>
-    <style>
+    <title>AI Vision Pro - Final Stable</title>
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+       <style>
         :root { --primary: #00d4ff; --bg: #0f172a; --card: #1e293b; --accent: #22c55e; --danger: #ef4444; --warning: #f59e0b; }
         
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
@@ -60,8 +60,7 @@
 
 <div class="main-wrapper">
     <div class="sidebar">
-        <h2>AI VISION PRO</h2>
-        
+        <h2 style="color: var(--primary); text-align: center; margin: 0;">AI VISION PRO</h2>
         <div class="stats-container">
             <div class="stat-box">
                 <span class="stat-value" id="fps-val">0</span>
@@ -72,18 +71,15 @@
                 <span class="stat-label">Faces</span>
             </div>
         </div>
-
-        <div id="status-bar"> Đang khởi động hệ thống...</div>
-
+        <div id="status-bar"> Đang nạp hệ thống...</div>
+        
         <div class="control-box">
             <span class="group-label">Engine Nhận Diện</span>
             <div class="btn-row">
                 <button id="engine-ssd" class="active" style="flex:1">SSD (Nhanh)</button>
                 <button id="engine-mtcnn" style="flex:1">MTCNN (Sâu)</button>
             </div>
-            <div id="mtcnn-alert" class="engine-warning">
-                ⚠️ <b>Chế độ Sâu:</b> MTCNN đang quét chi tiết. FPS sẽ thấp hơn, yêu cầu ảnh rõ hơn, quét chính xác hơn.
-            </div>
+            <div id="mtcnn-alert" class="engine-warning">⚠️ MTCNN rất nặng, FPS sẽ giảm.</div>
         </div>
 
         <div class="control-box">
@@ -101,7 +97,7 @@
         </div>
 
         <div class="control-box">
-            <span class="group-label">Tính năng AI</span>
+            <span class="group-label">Cài đặt</span>
             <button id="opt-age" class="active"> Hiển thị Tuổi / Giới tính</button>
         </div>
 
@@ -115,9 +111,8 @@
         <div id="media-container">
             <div id="scan-overlay">
                 <div class="spinner"></div>
-                <span id="scan-text">Đang phân tích AI...</span>
+                <span>Đang xử lý AI...</span>
             </div>
-            
             <video id="video" width="640" height="480" autoplay muted class="mirror"></video>
             <img id="image-preview" class="hidden">
             <canvas id="overlay"></canvas>
@@ -134,48 +129,66 @@
     const btnToggleCam = document.getElementById('btn-toggle-cam');
     const canvas = document.getElementById('overlay');
     const scanOverlay = document.getElementById('scan-overlay');
-    const mtcnnAlert = document.getElementById('mtcnn-alert');
-    
     const fpsVal = document.getElementById('fps-val');
     const countVal = document.getElementById('count-val');
+    const mtcnnAlert = document.getElementById('mtcnn-alert');
     
     let currentMode = 'live'; 
     let currentEngine = 'ssd';
     let localStream = null;
     let isCamOn = false;
-    let lastTime = 0;
     let isProcessing = false;
+    let lastTime = 0;
+    let requestID = null;
 
-    // 1. NẠP MODEL
+    // 1. KHỞI TẠO AI
     async function initAI() {
         try {
-            const MODEL_URL = './models';
+            const MODEL_URL = './models'; 
+            statusBar.innerText = "📦 Đang tải Models...";
             await Promise.all([
                 faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
                 faceapi.nets.mtcnn.loadFromUri(MODEL_URL),
                 faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
                 faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL)
             ]);
-            statusBar.innerText = " AI đã sẵn sàng hoạt động.";
+            statusBar.innerText = "✅ Hệ thống sẵn sàng";
             await startWebcam();
-            requestAnimationFrame(processFrame);
         } catch (err) {
-            statusBar.innerHTML = "<b style='color:red'>❌ Lỗi: Không thể nạp models. Kiểm tra đường dẫn /models.</b>";
+            statusBar.innerHTML = "<b style='color:red'>❌ Lỗi: Kiểm tra thư mục /models và Live Server!</b>";
+            console.error(err);
         }
     }
 
-    // 2. WEBCAM
+    // 2. QUẢN LÝ CAMERA (FIXED)
     async function startWebcam() {
-        if (localStream) stopWebcam();
         try {
-            localStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+            if (localStream) return true; 
+
+            statusBar.innerText = "📷 Đang kết nối camera...";
+            localStream = await navigator.mediaDevices.getUserMedia({ 
+                video: { width: 640, height: 480, facingMode: "user" } 
+            });
+
             video.srcObject = localStream;
-            isCamOn = true;
-            updateCamUI(true);
-            video.classList.remove('hidden');
-            return true;
+            
+            return new Promise((resolve) => {
+                video.onloadedmetadata = async () => {
+                    await video.play();
+                    isCamOn = true;
+                    isProcessing = false; 
+                    lastTime = 0;         
+                    video.classList.remove('hidden');
+                    updateCamUI(true);
+                    statusBar.innerText = "✅ Camera đang hoạt động";
+                    
+                    // Khởi động lại vòng lặp nếu chưa chạy
+                    if (!requestID) processFrame(); 
+                    resolve(true);
+                };
+            });
         } catch (err) {
-            statusBar.innerText = "❌ Không tìm thấy camera.";
+            statusBar.innerText = "❌ Lỗi: Không thể truy cập Camera.";
             return false;
         }
     }
@@ -185,156 +198,112 @@
             localStream.getTracks().forEach(track => track.stop());
             localStream = null;
         }
+        video.pause();
         video.srcObject = null;
         isCamOn = false;
+        isProcessing = false; // Giải phóng trạng thái ngay lập tức
         updateCamUI(false);
         clearCanvas();
+        
+        if (requestID) {
+            cancelAnimationFrame(requestID);
+            requestID = null;
+        }
     }
 
     function updateCamUI(on) {
-        btnToggleCam.innerText = on ? " Tắt Camera" : " Bật Camera";
+        btnToggleCam.innerText = on ? "📷 Tắt Camera" : "📷 Bật Camera";
         btnToggleCam.className = on ? "" : "off";
-        if (!on) { fpsVal.innerText = "0"; countVal.innerText = "0"; }
     }
 
     function clearCanvas() {
-        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-    }
-
-    // 3. XỬ LÝ FRAME LIVE
-    async function processFrame(now) {
-        if (currentMode === 'live' && isCamOn && video.readyState === 4 && !isProcessing) {
-            const deltaTime = now - lastTime;
-            lastTime = now;
-            fpsVal.innerText = deltaTime > 0 ? Math.round(1000 / deltaTime) : 0;
-            
-            isProcessing = true;
-            await runAI(video);
-            isProcessing = false;
-        }
-        requestAnimationFrame(processFrame);
-    }
-
-    // 4. HÀM CHẠY AI (LÕI XỬ LÝ)
-    async function runAI(source) {
-        if (!source || (source.tagName === 'IMG' && !source.complete)) return;
-        
-        const displaySize = { width: source.clientWidth, height: source.clientHeight };
-        if (displaySize.width === 0) return;
-        faceapi.matchDimensions(canvas, displaySize);
-
-        // CẤU HÌNH ENGINE
-        let options;
-        if (currentEngine === 'ssd') {
-            options = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 });
-        } else {
-            // Tối ưu cho nhóm đông người (đã giảm minFaceSize xuống 20)
-            options = new faceapi.MtcnnOptions({ 
-                minFaceSize: 20, 
-                scaleFactor: 0.709,
-                maxNumStages: 3 
-            });
-        }
-
-        const detections = await faceapi.detectAllFaces(source, options).withFaceLandmarks().withAgeAndGender();
-        const resizedResults = faceapi.resizeResults(detections, displaySize);
-        
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        countVal.innerText = "0";
+        fpsVal.innerText = "0";
+    }
 
-        ctx.save();
-        if (source === video) { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
+    // 3. VÒNG LẶP NHẬN DIỆN (SỬA LỖI TREO)
+    async function processFrame() {
+        // Nếu camera tắt hoặc không ở chế độ Live, xóa FPS và chờ
+        if (!isCamOn || currentMode !== 'live' || video.readyState !== 4) {
+            fpsVal.innerText = "0";
+            lastTime = 0;
+            requestID = requestAnimationFrame(processFrame);
+            return;
+        }
+
+        if (!isProcessing) {
+            isProcessing = true;
+            try {
+                // Tính FPS thực tế
+                const now = performance.now();
+                if (lastTime > 0) {
+                    const delta = now - lastTime;
+                    fpsVal.innerText = Math.round(1000 / delta);
+                }
+                lastTime = now;
+                
+                // Chạy AI
+                await runAI(video);
+            } catch (e) {
+                console.warn("AI Frame Skip...");
+            } finally {
+                isProcessing = false;
+            }
+        }
+        requestID = requestAnimationFrame(processFrame);
+    }
+
+    async function runAI(source) {
+        if (!source || source.classList.contains('hidden') || source.readyState === 0) return;
+
+        const displaySize = { 
+            width: source.offsetWidth || source.width, 
+            height: source.offsetHeight || source.height 
+        };
+        
+        if (displaySize.width === 0 || displaySize.height === 0) return;
+        
+        // Đảm bảo canvas khớp với video thực tế
+        if (canvas.width !== displaySize.width || canvas.height !== displaySize.height) {
+            faceapi.matchDimensions(canvas, displaySize);
+        }
+
+        const options = currentEngine === 'ssd' 
+            ? new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 })
+            : new faceapi.MtcnnOptions({ minFaceSize: 50 });
+
+        const detections = await faceapi.detectAllFaces(source, options)
+            .withFaceLandmarks()
+            .withAgeAndGender();
+
+        const resizedResults = faceapi.resizeResults(detections, displaySize);
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        countVal.innerText = detections.length;
 
         resizedResults.forEach(result => {
             const { age, gender, detection } = result;
+            let box = detection.box;
+            
+            // Xử lý tọa độ Mirror cho Webcam
+            if (source instanceof HTMLVideoElement) {
+                const x = displaySize.width - box.x - box.width;
+                box = new faceapi.Rect(x, box.y, box.width, box.height);
+            }
+
             const label = document.getElementById('opt-age').classList.contains('active') 
                 ? `${Math.round(age)}t - ${gender === 'male' ? 'Nam' : 'Nữ'}` : "";
             
-            // Đổi màu box theo engine để nhận diện
-            const boxColor = currentEngine === 'mtcnn' ? '#22c55e' : '#00d4ff';
-            new faceapi.draw.DrawBox(detection.box, { label, boxColor }).draw(canvas);
+            new faceapi.draw.DrawBox(box, {
+                label: label,
+                boxColor: currentEngine === 'mtcnn' ? '#22c55e' : '#00d4ff'
+            }).draw(canvas);
         });
-        ctx.restore();
-
-        countVal.innerText = detections.length;
     }
 
-    // 5. SỰ KIỆN NÚT BẤM
-    btnToggleCam.onclick = async () => isCamOn ? stopWebcam() : await startWebcam();
-
-    document.getElementById('engine-ssd').onclick = (e) => {
-        currentEngine = 'ssd';
-        toggleEngineUI(e.target);
-        mtcnnAlert.style.display = 'none';
-        statusBar.innerText = " Chuyển sang SSD (Nhanh).";
-    };
-
-    document.getElementById('engine-mtcnn').onclick = (e) => {
-        currentEngine = 'mtcnn';
-        toggleEngineUI(e.target);
-        mtcnnAlert.style.display = 'block';
-        statusBar.innerText = " Chuyển sang MTCNN (Sâu).";
-    };
-
-    function toggleEngineUI(target) {
-        document.getElementById('engine-ssd').classList.remove('active');
-        document.getElementById('engine-mtcnn').classList.remove('active');
-        target.classList.add('active');
-    }
-
-    document.getElementById('mode-live').onclick = async (e) => {
-        resetModeUI(); currentMode = 'live';
-        e.target.classList.add('active');
-        video.classList.remove('hidden');
-        if (!isCamOn) await startWebcam();
-    };
-
-    document.getElementById('mode-capture').onclick = async (e) => {
-        resetModeUI(); currentMode = 'capture';
-        e.target.classList.add('active');
-        video.classList.remove('hidden');
-        btnTakePhoto.classList.remove('hidden');
-        if (!isCamOn) await startWebcam();
-    };
-
-    document.getElementById('image-upload').onchange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            resetModeUI();
-            currentMode = 'upload';
-            stopWebcam();
-            imagePreview.classList.remove('hidden');
-            imagePreview.src = URL.createObjectURL(file);
-            btnScan.classList.remove('hidden');
-            statusBar.innerText = " Đã tải ảnh. Nhấn 'Phân tích' để quét.";
-        }
-    };
-
-    btnTakePhoto.onclick = () => {
-        if (!isCamOn) return;
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = video.videoWidth; tempCanvas.height = video.videoHeight;
-        const tCtx = tempCanvas.getContext('2d');
-        tCtx.translate(tempCanvas.width, 0); tCtx.scale(-1, 1);
-        tCtx.drawImage(video, 0, 0);
-        imagePreview.src = tempCanvas.toDataURL('image/png');
-        imagePreview.classList.remove('hidden');
-        video.classList.add('hidden');
-        btnTakePhoto.classList.add('hidden');
-        btnScan.classList.remove('hidden');
-        stopWebcam();
-    };
-
-    btnScan.onclick = async () => {
-        scanOverlay.style.display = 'flex';
-        document.getElementById('scan-text').innerText = `Đang phân tích (${currentEngine.toUpperCase()})...`;
-        // Delay nhẹ để UI spinner kịp hiện
-        setTimeout(async () => {
-            await runAI(imagePreview);
-            scanOverlay.style.display = 'none';
-        }, 150);
-    };
-
+    // 4. SỰ KIỆN ĐIỀU KHIỂN (MODIFIED)
     function resetModeUI() {
         clearCanvas();
         video.classList.add('hidden');
@@ -343,6 +312,102 @@
         btnTakePhoto.classList.add('hidden');
         document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active'));
     }
+
+    document.getElementById('mode-live').onclick = async (e) => {
+        resetModeUI(); 
+        currentMode = 'live';
+        e.target.classList.add('active');
+        if (isCamOn) {
+            video.classList.remove('hidden');
+        } else {
+            await startWebcam();
+        }
+        statusBar.innerText = "✅ Chế độ Live";
+    };
+
+    document.getElementById('mode-capture').onclick = async (e) => {
+        resetModeUI(); 
+        currentMode = 'live';
+        e.target.classList.add('active');
+        if (isCamOn) {
+            video.classList.remove('hidden');
+        } else {
+            await startWebcam();
+        }
+        btnTakePhoto.classList.remove('hidden');
+        statusBar.innerText = "📸 Sẵn sàng chụp ảnh";
+    };
+
+    btnTakePhoto.onclick = () => {
+        if (!isCamOn) return;
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = video.videoWidth; 
+        tempCanvas.height = video.videoHeight;
+        const tCtx = tempCanvas.getContext('2d');
+        
+        tCtx.translate(tempCanvas.width, 0);
+        tCtx.scale(-1, 1);
+        tCtx.drawImage(video, 0, 0);
+        
+        imagePreview.src = tempCanvas.toDataURL('image/png');
+        currentMode = 'upload'; 
+        video.classList.add('hidden');
+        imagePreview.classList.remove('hidden');
+        btnScan.classList.remove('hidden');
+        btnTakePhoto.classList.add('hidden');
+        clearCanvas();
+        statusBar.innerText = "📸 Đã chụp. Nhấn Phân Tích.";
+    };
+
+    btnScan.onclick = async () => {
+        scanOverlay.style.display = 'flex';
+        // Delay nhẹ để UI spinner kịp hiện
+        setTimeout(async () => {
+            await runAI(imagePreview);
+            scanOverlay.style.display = 'none';
+        }, 100);
+    };
+
+    document.getElementById('image-upload').onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            resetModeUI();
+            currentMode = 'upload';
+            imagePreview.src = URL.createObjectURL(file);
+            imagePreview.onload = () => {
+                imagePreview.classList.remove('hidden');
+                btnScan.classList.remove('hidden');
+                statusBar.innerText = "📂 Ảnh đã tải. Nhấn Phân Tích.";
+            };
+        }
+    };
+
+    btnToggleCam.onclick = async () => {
+        if (isCamOn) {
+            stopWebcam();
+            video.classList.add('hidden');
+            statusBar.innerText = "📷 Camera đã tắt";
+        } else {
+            await startWebcam();
+            if (currentMode === 'live') video.classList.remove('hidden');
+        }
+    };
+
+    document.getElementById('engine-ssd').onclick = (e) => {
+        currentEngine = 'ssd';
+        document.getElementById('engine-mtcnn').classList.remove('active');
+        e.target.classList.add('active');
+        mtcnnAlert.style.display = 'none';
+        clearCanvas();
+    };
+
+    document.getElementById('engine-mtcnn').onclick = (e) => {
+        currentEngine = 'mtcnn';
+        document.getElementById('engine-ssd').classList.remove('active');
+        e.target.classList.add('active');
+        mtcnnAlert.style.display = 'block';
+        clearCanvas();
+    };
 
     document.getElementById('opt-age').onclick = (e) => e.target.classList.toggle('active');
 
